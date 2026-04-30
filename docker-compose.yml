@@ -1,0 +1,27 @@
+# Paths and ports are overridable via shell env or a root `.env` next to this file.
+# https://docs.docker.com/compose/environment-variables/set-environment-variables/
+#
+# Rename everything from one file: put `PROJECT_NAME=my-app` in `config/.env` and run:
+#   docker compose --env-file ./config/.env up --build
+# (The Compose *project name* uses PROJECT_NAME; the API container reads the same file via env_file.)
+
+name: ${PROJECT_NAME:-meridian-stores}
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ${MERIDIAN_STORES_CONFIG_ENV:-./config/.env}
+    ports:
+      - "${MERIDIAN_STORES_API_PORT_PUBLISH:-8000}:${MERIDIAN_STORES_API_PORT:-8000}"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${MERIDIAN_STORES_WEB_PORT_PUBLISH:-5173}:80"
+    depends_on:
+      - api

@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+#
+# Lambda Web Adapter + uvicorn. Build context must be
+# `meridian-stores/backend/` (this directory).
+#
+#   docker build --platform linux/amd64 -f Dockerfile.lambda -t <ecr-url>:latest .
+
+FROM public.ecr.aws/lambda/python:3.12
+
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.0 \
+     /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV PORT=8000 \
+    AWS_LWA_INVOKE_MODE=buffered \
+    AWS_LWA_READINESS_CHECK_PATH=/health \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /var/task
+
+COPY pyproject.toml ./
+COPY src ./src
+
+RUN pip install --no-cache-dir -U pip setuptools wheel \
+    && pip install --no-cache-dir -e .
+
+ENV PYTHONPATH=/var/task/src
+
+ENTRYPOINT []
+CMD ["python", "-m", "uvicorn", "meridian_stores.app:app", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]

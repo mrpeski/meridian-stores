@@ -1,0 +1,46 @@
+# Local env files
+config/.env
+frontend/.env
+frontend/.env.local
+backend/.env
+backend/.env.local
+
+# OS/editor files
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Python
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Terraform
+infra/aws/.terraform/
+infra/aws/backend.tf
+infra/aws/*.tfstate
+infra/aws/*.tfstate.*
+infra/aws/*.tfplan
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfplan
+infra/bootstrap/.terraform/
+infra/bootstrap/*.tfstate
+infra/bootstrap/*.tfstate.*
+infra/bootstrap/*.tfplan

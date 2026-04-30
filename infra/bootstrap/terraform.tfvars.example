@@ -1,0 +1,11 @@
+aws_region = "us-east-1"
+project    = "meridian-stores"
+
+github_owner  = "your-github-user-or-org"
+github_repo   = "your-repo"
+github_branch = "main"
+
+# Optional:
+# state_bucket_name = "meridian-stores-tfstate-123456789012"
+# role_name         = "meridian-stores-github-actions"
+# github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"

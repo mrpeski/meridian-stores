@@ -1,0 +1,21 @@
+aws_region = "us-east-1"
+
+# Match meridian-stores PROJECT_NAME when possible.
+project = "meridian-stores"
+
+lambda_memory_mb   = 256
+lambda_timeout_sec = 30
+
+# After first apply, set to frontend_url (CloudFront HTTPS) and re-apply.
+cors_allow_origin = "*"
+
+# clerk_enabled = true
+# clerk_issuer    = "https://your-app.clerk.accounts.com"
+# clerk_jwks_url  = "https://your-app.clerk.accounts.com/.well-known/jwks.json"
+
+# Example extra env for the Lambda (optional):
+# env_vars = {
+#   PROJECT_NAME = "meridian-stores"
+# }
+
+# secret_env_vars = {}

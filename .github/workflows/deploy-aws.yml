@@ -1,0 +1,110 @@
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.MERIDIAN_STORES_AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
+  AWS_ROLE_TO_ASSUME: ${{ vars.MERIDIAN_STORES_AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_TO_ASSUME }}
+  TF_STATE_BUCKET: ${{ vars.MERIDIAN_STORES_TF_STATE_BUCKET || vars.TF_STATE_BUCKET }}
+  TF_VAR_project: ${{ vars.MERIDIAN_STORES_PROJECT || 'meridian-stores' }}
+  TF_VAR_aws_region: ${{ vars.MERIDIAN_STORES_AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
+  TF_VAR_cors_allow_origin: ${{ vars.MERIDIAN_STORES_CORS_ALLOW_ORIGIN || vars.CORS_ALLOW_ORIGIN || '*' }}
+  TF_VAR_clerk_enabled: ${{ vars.MERIDIAN_STORES_CLERK_ENABLED || 'false' }}
+  TF_VAR_clerk_issuer: ${{ vars.MERIDIAN_STORES_CLERK_ISSUER || vars.CLERK_ISSUER || '' }}
+  TF_VAR_clerk_jwks_url: ${{ vars.MERIDIAN_STORES_CLERK_JWKS_URL || vars.CLERK_JWKS_URL || '' }}
+  TF_VAR_secret_env_vars: ${{ secrets.MERIDIAN_STORES_SECRET_ENV_VARS_JSON || '{}' }}
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        run: |
+          test -n "${TF_STATE_BUCKET}" || {
+            echo "Set MERIDIAN_STORES_TF_STATE_BUCKET or TF_STATE_BUCKET in repository variables." >&2
+            exit 1
+          }
+          test -n "${AWS_ROLE_TO_ASSUME}" || {
+            echo "Set MERIDIAN_STORES_AWS_ROLE_TO_ASSUME or AWS_ROLE_TO_ASSUME in repository variables." >&2
+            exit 1
+          }
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Initialize Terraform
+        working-directory: infra/aws
+        run: |
+          cp backend.tf.example backend.tf
+          terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${AWS_REGION}"
+
+      - name: Ensure ECR repository exists
+        working-directory: infra/aws
+        run: terraform apply -auto-approve -target=aws_ecr_repository.api
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        id: image
+        run: |
+          ECR_REPO="$(terraform -chdir=infra/aws output -raw ecr_repo)"
+          IMAGE_URI="${ECR_REPO}:${GITHUB_SHA}"
+          docker buildx build \
+            --platform linux/amd64 \
+            -f backend/Dockerfile.lambda \
+            -t "${IMAGE_URI}" \
+            -t "${ECR_REPO}:latest" \
+            --push \
+            backend
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply AWS infrastructure
+        working-directory: infra/aws
+        run: terraform apply -auto-approve
+
+      - name: Update Lambda to this image
+        run: |
+          aws lambda update-function-code \
+            --function-name "$(terraform -chdir=infra/aws output -raw lambda_function_name)" \
+            --image-uri "${{ steps.image.outputs.image_uri }}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          export VITE_API_BASE_URL="$(terraform -chdir=../infra/aws output -raw api_url)"
+          npm ci
+          npm run build
+
+      - name: Publish frontend
+        run: |
+          aws s3 sync frontend/dist "s3://$(terraform -chdir=infra/aws output -raw frontend_bucket)" --delete
+          aws cloudfront create-invalidation \
+            --distribution-id "$(terraform -chdir=infra/aws output -raw cloudfront_distribution_id)" \
+            --paths "/*"
+
+      - name: Deployment summary
+        run: |
+          echo "API: $(terraform -chdir=infra/aws output -raw api_url)"
+          echo "Frontend: $(terraform -chdir=infra/aws output -raw frontend_url)"
