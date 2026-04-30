@@ -42,6 +42,9 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
@@ -67,10 +70,11 @@ jobs:
           IMAGE_URI="${ECR_REPO}:${GITHUB_SHA}"
           docker buildx build \
             --platform linux/amd64 \
+            --provenance=false \
+            --output=type=image,oci-mediatypes=false,push=true \
             -f backend/Dockerfile.lambda \
             -t "${IMAGE_URI}" \
             -t "${ECR_REPO}:latest" \
-            --push \
             backend
           echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
