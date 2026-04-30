@@ -3,8 +3,14 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from meridian_stores.agents.chatbot import CustomerSupportBot
+from meridian_stores.agents.chatbot_config import ChatbotConfig
+from meridian_stores.agents.conversation_manager import conversation_manager
 from meridian_stores.settings import settings
 
 
@@ -16,6 +22,18 @@ class HelloWorldError(Exception):
 
 
 app = FastAPI(title=settings.app_name)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    conversation_id: str | None = None
+    customer_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    response: str
+    conversation_id: str
+    metadata: dict = Field(default_factory=dict)
 
 
 @app.exception_handler(HelloWorldError)
@@ -71,3 +89,59 @@ async def hello() -> dict[str, str]:
         "project": settings.project_name,
         "service": settings.service_name,
     }
+
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest) -> ChatResponse:
+    if not settings.openai_api_key.strip():
+        raise HelloWorldError(
+            code="configuration_error",
+            message="OpenAI API key is not configured",
+            status_code=503,
+        )
+
+    conversation_id = request.conversation_id or conversation_manager.create_conversation()
+    history = conversation_manager.get_conversation(conversation_id)
+
+    config = ChatbotConfig(
+        mcp_server_url=settings.mcp_server_url,
+        openai_api_key=settings.openai_api_key,
+        model=settings.chatbot_model,
+    )
+
+    try:
+        async with streamablehttp_client(
+            url=config.mcp_server_url,
+            headers=config.mcp_headers,
+        ) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                bot = CustomerSupportBot(config, session)
+                await bot.initialize()
+                try:
+                    bot_response, tool_calls, usage = await bot.handle_message(
+                        request.message,
+                        history,
+                    )
+                finally:
+                    await bot.close()
+    except HelloWorldError:
+        raise
+    except Exception as e:
+        raise HelloWorldError(
+            code="chatbot_error",
+            message=f"Failed to process chat message: {type(e).__name__}: {e}",
+            status_code=502,
+        ) from e
+
+    conversation_manager.add_message(conversation_id, "user", request.message)
+    conversation_manager.add_message(conversation_id, "assistant", bot_response)
+
+    metadata: dict = {"tool_calls": tool_calls}
+    if usage and usage.get("total_tokens") is not None:
+        metadata["tokens_used"] = usage["total_tokens"]
+
+    return ChatResponse(
+        response=bot_response,
+        conversation_id=conversation_id,
+        metadata=metadata,
+    )

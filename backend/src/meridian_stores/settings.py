@@ -55,6 +55,22 @@ class Settings(BaseSettings):
         description="Payload returned by GET /api/hello; defaults from project_name.",
     )
 
+    openai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("MERIDIAN_STORES_OPENAI_API_KEY", "OPENAI_API_KEY"),
+        description="OpenAI API key for the customer support chatbot.",
+    )
+    mcp_server_url: str = Field(
+        default="https://order-mcp-74afyau24q-uc.a.run.app/mcp",
+        validation_alias=AliasChoices("MERIDIAN_STORES_MCP_SERVER_URL", "MCP_SERVER_URL"),
+        description="MCP server URL (Streamable HTTP); order-management tools.",
+    )
+    chatbot_model: str = Field(
+        default="gpt-4o",
+        validation_alias=AliasChoices("MERIDIAN_STORES_CHATBOT_MODEL", "CHATBOT_MODEL"),
+        description="OpenAI model id for the chatbot.",
+    )
+
     @model_validator(mode="after")
     def _derive_identity_from_project(self) -> Self:
         pn = self.project_name
