@@ -14,7 +14,7 @@ from meridian_stores.agents.conversation_manager import conversation_manager
 from meridian_stores.settings import settings
 
 
-class HelloWorldError(Exception):
+class MeridianStoresError(Exception):
     def __init__(self, code: str, message: str, status_code: int = 400) -> None:
         self.code = code
         self.message = message
@@ -36,8 +36,8 @@ class ChatResponse(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
-@app.exception_handler(HelloWorldError)
-async def _hello_error(_request: Request, exc: HelloWorldError) -> JSONResponse:
+@app.exception_handler(MeridianStoresError)
+async def _hello_error(_request: Request, exc: MeridianStoresError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code, "message": exc.message}},
@@ -94,13 +94,15 @@ async def hello() -> dict[str, str]:
 @app.post("/api/chat")
 async def chat(request: ChatRequest) -> ChatResponse:
     if not settings.openai_api_key.strip():
-        raise HelloWorldError(
+        raise MeridianStoresError(
             code="configuration_error",
             message="OpenAI API key is not configured",
             status_code=503,
         )
 
-    conversation_id = request.conversation_id or conversation_manager.create_conversation()
+    conversation_id = (
+        request.conversation_id or conversation_manager.create_conversation()
+    )
     history = conversation_manager.get_conversation(conversation_id)
 
     config = ChatbotConfig(
@@ -124,10 +126,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     )
                 finally:
                     await bot.close()
-    except HelloWorldError:
+    except MeridianStoresError:
         raise
     except Exception as e:
-        raise HelloWorldError(
+        raise MeridianStoresError(
             code="chatbot_error",
             message=f"Failed to process chat message: {type(e).__name__}: {e}",
             status_code=502,

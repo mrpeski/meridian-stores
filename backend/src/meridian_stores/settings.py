@@ -35,14 +35,19 @@ class Settings(BaseSettings):
         description="Slug for this deployment; drives defaults unless overridden below.",
     )
 
-    app_name: str = Field(default="meridian-stores", description="FastAPI title; defaults to project_name.")
+    app_name: str = Field(
+        default="meridian-stores",
+        description="FastAPI title; defaults to project_name.",
+    )
     service_name: str = Field(
         default="meridian-stores-svc",
         description="Identifies this deployment in JSON; defaults to {project_name}-svc.",
     )
 
     api_host: str = Field(default="0.0.0.0", description="Bind address for uvicorn.")
-    api_port: int = Field(default=8000, ge=1, le=65535, description="Bind port for uvicorn.")
+    api_port: int = Field(
+        default=8000, ge=1, le=65535, description="Bind port for uvicorn."
+    )
 
     # Comma-separated list, e.g. "http://localhost:5173,http://127.0.0.1:3000"
     cors_origins: str = Field(
@@ -57,12 +62,16 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field(
         default="",
-        validation_alias=AliasChoices("MERIDIAN_STORES_OPENAI_API_KEY", "OPENAI_API_KEY"),
+        validation_alias=AliasChoices(
+            "MERIDIAN_STORES_OPENAI_API_KEY", "OPENAI_API_KEY"
+        ),
         description="OpenAI API key for the customer support chatbot.",
     )
     mcp_server_url: str = Field(
         default="https://order-mcp-74afyau24q-uc.a.run.app/mcp",
-        validation_alias=AliasChoices("MERIDIAN_STORES_MCP_SERVER_URL", "MCP_SERVER_URL"),
+        validation_alias=AliasChoices(
+            "MERIDIAN_STORES_MCP_SERVER_URL", "MCP_SERVER_URL"
+        ),
         description="MCP server URL (Streamable HTTP); order-management tools.",
     )
     chatbot_model: str = Field(
