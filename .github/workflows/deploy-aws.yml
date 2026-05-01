@@ -17,7 +17,6 @@ env:
   TF_VAR_clerk_enabled: ${{ vars.MERIDIAN_STORES_CLERK_ENABLED || 'false' }}
   TF_VAR_clerk_issuer: ${{ vars.MERIDIAN_STORES_CLERK_ISSUER || vars.CLERK_ISSUER || '' }}
   TF_VAR_clerk_jwks_url: ${{ vars.MERIDIAN_STORES_CLERK_JWKS_URL || vars.CLERK_JWKS_URL || '' }}
-  TF_VAR_secret_env_vars: ${{ secrets.MERIDIAN_STORES_SECRET_ENV_VARS_JSON || '{}' }}
 
 jobs:
   deploy:
@@ -56,6 +55,33 @@ jobs:
         run: |
           cp backend.tf.example backend.tf
           terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${AWS_REGION}"
+
+      - name: Materialize secret_env_vars tfvars
+        working-directory: infra/aws
+        env:
+          OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+        run: |
+          for v in OPENAI_API_KEY ANTHROPIC_API_KEY GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN; do
+            echo "::add-mask::${!v}"
+          done
+          jq -n \
+            --arg openai    "$OPENAI_API_KEY" \
+            --arg anthropic "$ANTHROPIC_API_KEY" \
+            --arg gid       "$GOOGLE_CLIENT_ID" \
+            --arg gsec      "$GOOGLE_CLIENT_SECRET" \
+            --arg grt       "$GOOGLE_REFRESH_TOKEN" \
+            '{secret_env_vars: {
+                OPENAI_API_KEY: $openai,
+                ANTHROPIC_API_KEY: $anthropic,
+                GOOGLE_CLIENT_ID: $gid,
+                GOOGLE_CLIENT_SECRET: $gsec,
+                GOOGLE_REFRESH_TOKEN: $grt
+              }}' > secrets.auto.tfvars.json
+          echo "Wrote $(wc -c < secrets.auto.tfvars.json) bytes to secrets.auto.tfvars.json"
 
       - name: Ensure ECR repository exists
         working-directory: infra/aws
